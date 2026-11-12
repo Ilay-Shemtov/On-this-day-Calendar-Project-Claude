@@ -1,0 +1,20 @@
+# Manual corrections for the sensitive-topic filter.
+# Check report.html on your calendar site to see what was removed and why.
+#
+# Use Wikipedia article titles exactly as they appear on Wikipedia (spaces or underscores both work).
+# An item matches if it links to any of the listed articles.
+
+# Always show items that link to these articles, even if the filter would remove them.
+include_articles = [
+  # "Murder of John Lennon",
+]
+
+# Never show items that link to these articles.
+exclude_articles = [
+  # "Jonestown",
+]
+
+# Never show items whose text contains any of these phrases (not case-sensitive).
+exclude_phrases = [
+  # "electric chair",
+]

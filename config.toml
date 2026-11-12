@@ -1,0 +1,29 @@
+# On This Day calendar settings. Edit, commit and push: GitHub rebuilds the calendar automatically.
+
+[calendar]
+name = "On This Day"
+description = "Historical events, births and deaths from Wikipedia, every day."
+title_prefix = "📜 "     # shown before each day's headline; "" for none
+events_per_day = 5
+births_per_day = 3
+deaths_per_day = 3
+links = "events"         # Wikipedia link under each item: "none", "events" or "all"
+max_per_topic = 2        # at most this many events per day under the same label, e.g. "World War II:"
+
+[filter]
+# Massacres, genocide and other atrocities that are part of a war (My Lai, the Holocaust...).
+# "keep" because wars and conflicts are wanted; "drop" for a gentler calendar.
+war_atrocities = "keep"
+
+# "Fame" = how many Wikimedia sites (mostly Wikipedia language editions) have an article on the topic.
+# Crimes that aren't gruesome, court cases, disasters and criminals are kept only if this famous.
+# (The O. J. Simpson trial article has roughly 30; a typical plane crash 5-15.)
+famous_threshold = 20
+# Terrorist attacks outside a war context need much more (9/11 has well over 100).
+terrorism_threshold = 80
+
+[fetch]
+# Wikimedia requires contact details in requests. In GitHub Actions the repository URL is used
+# automatically; for runs on your own computer put an email address or URL here.
+contact = ""
+delay_seconds = 0.5      # pause between Wikipedia requests
