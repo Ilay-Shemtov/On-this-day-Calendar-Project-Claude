@@ -1,0 +1,70 @@
+name: Build calendar
+
+on:
+  workflow_dispatch:        # "Run workflow" button on the Actions tab (use it once a year for fresh picks)
+  push:
+    branches: [main]
+    paths:
+      - "config.toml"
+      - "overrides.toml"
+      - "otd/**"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false   # a second run waits for the first, then reuses its downloaded data
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Work out cache key
+        id: year
+        run: echo "year=$(date -u +%Y)" >> "$GITHUB_OUTPUT"
+
+      # Wikipedia data is downloaded once per year; later runs (e.g. after editing overrides.toml)
+      # reuse it and finish in about a minute.
+      - name: Restore downloaded Wikipedia data
+        uses: actions/cache/restore@v6
+        with:
+          path: cache
+          key: wiki-data-${{ steps.year.outputs.year }}-v1-${{ github.run_id }}
+          restore-keys: wiki-data-${{ steps.year.outputs.year }}-v1-
+
+      - name: Fetch and build
+        run: python -m otd all --max-minutes 100
+
+      # Saved even if the run fails half-way, so a re-run continues where it stopped.
+      - name: Save downloaded Wikipedia data
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: cache
+          key: wiki-data-${{ steps.year.outputs.year }}-v1-${{ github.run_id }}
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
