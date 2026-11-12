@@ -14,7 +14,7 @@ from otd.__main__ import main
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "cache"
-DAYS = "01-24,02-29,04-20,09-11,10-03,12-01"
+DAYS = "01-24,02-29,04-20,09-11,10-03,11-12,12-01"
 
 
 def unfold(ics: str) -> str:
@@ -45,8 +45,8 @@ class TestBuild(unittest.TestCase):
         self.assertLessEqual(max(len(line) for line in lines), 75, "lines must be folded at 75 octets")
         self.assertNotIn(b"\n", self.raw.replace(b"\r\n", b""), "only CRLF line endings")
         self.assertTrue(self.text.startswith("BEGIN:VCALENDAR\r\nVERSION:2.0"))
-        self.assertEqual(self.text.count("BEGIN:VEVENT"), 6)
-        self.assertEqual(self.text.count("RRULE:FREQ=YEARLY"), 6)
+        self.assertEqual(self.text.count("BEGIN:VEVENT"), 7)
+        self.assertEqual(self.text.count("RRULE:FREQ=YEARLY"), 7)
         self.assertIn("DTSTART;VALUE=DATE:20000229", self.text)
         uids = re.findall(r"^UID:(.+)$", self.text, re.M)
         self.assertEqual(len(uids), len(set(uids)))
@@ -60,6 +60,23 @@ class TestBuild(unittest.TestCase):
         self.assertIn("acquitted of the murders", text)  # ...but the famous 1995 verdict stays
         self.assertIn("September 11 attacks", text)
         self.assertIn("Adolf Hitler", text)  # births of historical figures are history
+
+    def test_ranking_prefers_important_events(self):
+        """Nov 12: the Main Page's 5 picks (chosen for variety, not importance) must not crowd out bigger events,
+        and an item isn't important just because it mentions something famous (a dredger "for the Panama Canal")."""
+        nov12 = json.loads((self.out / "days" / "11.json").read_text(encoding="utf-8"))["11-12"]
+        texts = " ".join(e["text"] for e in nov12["events"])
+        self.assertIn("World Wide Web", texts)
+        self.assertIn("Trotsky", texts)
+        self.assertNotIn("dredger", texts)
+        self.assertEqual(nov12["headline"]["year"], "1927")
+
+    def test_report_shows_download_counts(self):
+        report = (self.out / "report.html").read_text(encoding="utf-8")
+        self.assertIn("Downloaded data", report)
+        self.assertIn("https://en.wikipedia.org/wiki/November_12", report)
+        # the fixture days are deliberately small, so the "thin day" warning must fire
+        self.assertIn("Fewer than 20 events were downloaded", report)
 
     def test_days_json(self):
         days = {}
@@ -79,7 +96,7 @@ class TestBuild(unittest.TestCase):
         for year in (2026, 2027, 2028):
             occ = recurring_ical_events.of(cal).between(dt.date(year, 1, 1), dt.date(year + 1, 1, 1))
             counts[year] = len(occ)
-        self.assertEqual(counts, {2026: 5, 2027: 5, 2028: 6})  # Feb 29 only in leap years
+        self.assertEqual(counts, {2026: 6, 2027: 6, 2028: 7})  # Feb 29 only in leap years
 
 
 if __name__ == "__main__":

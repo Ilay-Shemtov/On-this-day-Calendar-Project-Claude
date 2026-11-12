@@ -193,7 +193,7 @@ CREATIVE_WORK = re.compile(
     re.IGNORECASE,
 )
 GENERIC_PLACE = re.compile(
-    r"^(?:[\w’'.,-]+\s+){0,4}?(?:country|countries|sovereign state|city|town|village|capital|municipality|commune|"
+    r"^(?:[\w’–—'.,-]+\s+){0,4}?(?:country|countries|sovereign state|city|town|village|capital|municipality|commune|"
     r"county|province|region|island|archipelago|continent|ocean|sea|river|lake|mountain range|planet|"
     r"natural satellite|state|empire|kingdom|republic|ethnic group|language|religion|religious denomination|"
     r"borough|district|metropolis|megacity)\b",

@@ -5,8 +5,10 @@ deaths from Wikipedia's "On this day" pages, with sensitive topics filtered out.
 entry that repeats every year, so the feed keeps working even if you never rebuild it.
 
 - **Costs nothing:** GitHub Actions builds it and GitHub Pages hosts it.
-- **Curated:** Wikipedia editors' "selected anniversaries" come first, then the most famous other items,
-  measured by how many Wikipedia language editions cover them.
+- **Ranked by importance:** every event on the date's full Wikipedia page competes. Each is scored by how
+  many Wikipedia language editions cover the event's own article (or, if it has none, its main subject),
+  so a minor event doesn't win just because it mentions something famous. The Main Page's daily picks
+  get only a small edge, because Wikipedia chooses those for article quality and variety, not importance.
 - **Filtered:** history, not true crime (see [How the filter works](#how-the-filter-works)).
 
 An entry looks like this (one per day; the title is the day's top event):
@@ -62,8 +64,9 @@ DIED
 The feed URL is `https://YOUR-USERNAME.github.io/on-this-day/on-this-day.ics`.
 
 - **Google Calendar:** on a computer, **Other calendars → + → From URL** → paste the feed URL. (The
-  mobile app can't add calendars by URL; once added on the web it shows up on your phone too.) Google
-  refreshes subscriptions on its own schedule, roughly once a day.
+  mobile app can't add calendars by URL; once added on the web it shows up on your phone too.) **A new
+  subscription can take several hours, sometimes up to a day, before any events appear**; after that
+  Google refreshes it roughly once a day. Add it only once: each extra attempt creates another copy.
 - **Apple Calendar:** tap or click the *webcal* button on the site. Or, on a Mac, **File → New Calendar
   Subscription**; on iPhone, **Settings → Apps → Calendar → Calendar Accounts → Add Account → Other →
   Add Subscribed Calendar**.
@@ -130,6 +133,10 @@ Then import `site/on-this-day.ics` into any calendar app, or open `site/report.h
 
 ## Troubleshooting
 
+- **Google Calendar shows the calendar but no events.** Usually Google just hasn't fetched it yet; give
+  it up to a day. To check the file itself right away, use the site's "download the .ics" link and
+  import it into a *new, separate* calendar (Settings → Import & export). If that import works, the feed
+  is fine and the subscription only needs time. Delete the test calendar afterwards.
 - **New changes don't show in Google Calendar.** Google re-reads subscribed feeds roughly once a day, and
   you can't force it. Apple Calendar lets you choose the refresh interval.
 - **The build failed while fetching.** Wikipedia occasionally rate-limits or is slow, and each run stops

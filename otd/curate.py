@@ -9,8 +9,16 @@ from dataclasses import dataclass, field
 from .config import norm_title
 from .sensitive import Verdict, classify, clean_text, decide, is_generic, topic_prefix
 
-SELECTED_BONUS = 3  # editor-curated "selected anniversaries" outrank equally famous plain events
+# Wikipedia's Main Page "selected anniversaries" are picked for article quality and variety, not importance,
+# so they get only a small edge (enough that their nicer wording wins when both lists have the same event).
+SELECTED_BONUS = 1.2
 
+# Titles of articles that are about one specific event.
+EVENT_WORDS = re.compile(
+    r"\b(?:Battle|Siege|Treaty|Accord|Agreement|Declaration|Conference|Summit|Massacre|Attacks?|Bombings?|Plot|"
+    r"Crisis|Disaster|Earthquake|Cyclone|Hurricane|Election|Referendum|Landings?|Flight \d+|Expedition|Riots?|Coup|"
+    r"Assassination|Incident|Affair|Trial|Raid|Invasion|Operation|Uprising|Rebellion|Revolution|Mutiny|Armistice)\b"
+)
 EVENTISH_TITLE = re.compile(
     r"\b(?:Battle|Siege|Treaty|Act|Accord|Agreement|Declaration|Conference|Summit|Revolution|Rebellion|Uprising|"
     r"War|Massacre|Attacks?|Bombings?|Plot|Crisis|Disaster|Fire|Earthquake|Election|Referendum|Landings?|Mission|"
@@ -26,7 +34,7 @@ class Candidate:
     year: int | None
     text: str
     pages: list[dict]
-    score: int = 0  # ranking: fame of the most famous specific article linked
+    score: float = 0  # ranking: fame of the event's own article, or of its subject
     fame: int = 0  # filter: fame of the event's own article when there is one
     verdict: Verdict | None = None
     keep: bool = True
@@ -65,6 +73,22 @@ def _is_context_prefix(page: dict, year: int | None) -> bool:
     return not (re.match(rf"\s*(?:c\.\s*)?{year}\b", desc) or re.search(rf"\b{year}\b", page["title"]))
 
 
+_STOP = {"the", "of", "and", "in", "on", "a", "an", "for", "to"}
+
+
+def _words(s: str) -> set[str]:
+    s = re.sub(r"\([^)]*\)", " ", s.casefold())
+    return {w for w in re.findall(r"[\w']+", s) if w not in _STOP}
+
+
+def _matches_prefix(title: str, prefix: str) -> bool:
+    """'World War II' matches the label 'Second World War:'; 'Draft lottery (1969)' doesn't match 'Vietnam War:'."""
+    if norm_title(title) == norm_title(prefix):
+        return True
+    t = _words(title)
+    return bool(t) and len(t & _words(prefix)) * 2 >= len(t)
+
+
 def _content_pages(text: str, pages: list[dict], year: int | None = None) -> list[dict]:
     """Pages that describe this specific item: not places/countries, not a 'World War II:'-style topic label."""
     pages = [p for p in pages if p.get("type") != "disambiguation"]
@@ -72,18 +96,42 @@ def _content_pages(text: str, pages: list[dict], year: int | None = None) -> lis
     specific = [p for p in pages if not is_generic(p.get("desc") or "")]
     if prefix and len(specific) > 1:
         specific = [p for p in specific
-                    if not (norm_title(p["title"]) == norm_title(prefix) and _is_context_prefix(p, year))] or specific
+                    if not (_matches_prefix(p["title"], prefix) and _is_context_prefix(p, year))] or specific
     return specific or pages
+
+
+def _is_event_article(page: dict, year: int | None) -> bool:
+    """An article about this very event: '1970 Bhola cyclone', 'Treaty of Rapallo (1920)', 'Operation Catechism'.
+
+    Wikipedia's short descriptions of event articles usually start with the year ("1944 British air raid").
+    Broad topics like 'Cold War' ("1947–1991 geopolitical rivalry") don't count unless the event is in their
+    first year.
+    """
+    desc = page.get("desc") or ""
+    if year is not None and year > 0:
+        if re.match(rf"\s*(?:c\.\s*)?{year}\b", desc) or re.search(rf"\b{year}\b", page["title"]):
+            return True
+    return bool(EVENT_WORDS.search(page["title"])) and not re.match(r"\s*(?:c\.\s*)?\d{3,4}", desc)
 
 
 def score_item(kind: str, text: str, pages: list[dict], sitelinks: dict[str, int] | None,
                year: int | None = None) -> int:
+    """How important an item is: the fame of its own article, not of everything it mentions.
+
+    Events: the article about the event itself if one is linked, otherwise the item's subject (the first
+    specific link, e.g. "Leon Trotsky" in "Leon Trotsky is expelled from the Communist Party").
+    A dredger launched "for the construction of the Panama Canal" is scored as the dredger, not the canal.
+    """
     pages = [p for p in pages if p.get("type") != "disambiguation"]
     if not pages:
         return 0
     if kind in ("births", "deaths"):
         return _page_fame(pages[0], sitelinks)
-    return max(_page_fame(p, sitelinks) for p in _content_pages(text, pages, year))
+    content = _content_pages(text, pages, year)
+    events = [p for p in content if _is_event_article(p, year)]
+    if events:
+        return max(_page_fame(p, sitelinks) for p in events)
+    return _page_fame(content[0], sitelinks)
 
 
 def _event_pages(text: str, pages: list[dict], year: int | None) -> list[dict]:
@@ -111,7 +159,9 @@ def pick_link(kind: str, text: str, pages: list[dict], year: int | None = None) 
         return None
     if kind in ("births", "deaths"):
         return pages[0].get("url")
-    return (_event_pages(text, pages, year) or _content_pages(text, pages, year))[0].get("url")
+    content = _content_pages(text, pages, year)
+    own = [p for p in content if _is_event_article(p, year)]
+    return (own or _event_pages(text, pages, year) or content)[0].get("url")
 
 
 def qids_needed(day: dict) -> set[str]:

@@ -88,8 +88,11 @@ def index_html(cfg: dict) -> str:
   </div>
   <p class="small">Feed URL: <code id="url"></code><br>
   Google: if the button doesn't work, open Google Calendar on a computer → <em>Other calendars</em> → <em>+</em> →
-  <em>From URL</em> and paste the feed URL. Google refreshes subscribed calendars roughly once a day.<br>
-  Outlook.com: <em>Add calendar</em> → <em>Subscribe from web</em> → paste the feed URL.</p>
+  <em>From URL</em> and paste the feed URL. <strong>Google can take several hours (sometimes up to a day) to show
+  a newly added calendar</strong>, and then refreshes it roughly once a day.<br>
+  Outlook.com: <em>Add calendar</em> → <em>Subscribe from web</em> → paste the feed URL.<br>
+  Troubleshooting: <a id="download" href="#" download>download the .ics</a> to import it once (shows
+  immediately, but never updates) · <a id="validate" href="#">check the feed with an online validator</a></p>
 </div>
 
 <h2 id="today-title">Today</h2>
@@ -104,6 +107,8 @@ const webcal = "webcal://" + feed.host + feed.pathname;
 document.getElementById("url").textContent = feed.href;
 document.getElementById("webcal").href = webcal;
 document.getElementById("google").href = "https://www.google.com/calendar/render?cid=" + webcal;
+document.getElementById("download").href = feed.href;
+document.getElementById("validate").href = "https://icalendar.org/validator.html?url=" + encodeURIComponent(feed.href);
 document.getElementById("copy").onclick = async (e) => {{
   try {{ await navigator.clipboard.writeText(feed.href); e.target.textContent = "Copied"; }}
   catch (_) {{ prompt("Copy the feed URL:", feed.href); }}
@@ -135,7 +140,39 @@ def _row(day: str, c: Candidate, decision: str) -> str:
             f"{'' if 'fame' in c.why else f' · fame {c.fame}'}</td></tr>")
 
 
-def report_html(days: list[DayResult], cfg: dict, generated: dt.datetime, notes: list[str]) -> str:
+def _date_page(key: str) -> str:
+    return f"https://en.wikipedia.org/wiki/{MONTHS[int(key[:2]) - 1]}_{int(key[3:])}"
+
+
+def _counts_html(counts: dict[str, dict[str, int]], cfg: dict) -> str:
+    if not counts:
+        return ""
+    def stat(kind: str) -> str:
+        values = sorted((c[kind], k) for k, c in counts.items())
+        lo, hi = values[0], values[-1]
+        median = values[len(values) // 2][0]
+        return (f"{kind}: median {median} per date (fewest {lo[0]} on {_esc(_day_label(lo[1]))}, "
+                f"most {hi[0]} on {_esc(_day_label(hi[1]))})")
+    cal = cfg["calendar"]
+    rows = "".join(
+        f"<tr><td>{_esc(_day_label(k))}</td><td>{c['events']}</td><td>{c['selected']}</td><td>{c['births']}</td>"
+        f"<td>{c['deaths']}</td><td><a href='{_date_page(k)}'>Wikipedia article</a></td></tr>"
+        for k, c in sorted(counts.items()))
+    return f"""
+<h2>Downloaded data</h2>
+<p class="small">Everything listed under <em>Events</em>, <em>Births</em> and <em>Deaths</em> in each date's Wikipedia
+article is downloaded (all sub-sections: pre-1600, 1601–1900, 1901–present), plus the 5 or so events Wikipedia's Main
+Page picks for that date. The calendar then shows the top {cal["events_per_day"]} events, {cal["births_per_day"]} births
+and {cal["deaths_per_day"]} deaths of each date (change this in <code>config.toml</code>).</p>
+<p class="small">{stat("events")}<br>{stat("births")}<br>{stat("deaths")}</p>
+<details><summary class="small">Counts for every date</summary>
+<table><thead><tr><th>Date</th><th>Events</th><th>Main Page picks</th><th>Births</th><th>Deaths</th><th>Compare</th></tr></thead>
+<tbody>{rows}</tbody></table></details>
+"""
+
+
+def report_html(days: list[DayResult], cfg: dict, generated: dt.datetime, notes: list[str],
+                counts: dict[str, dict[str, int]] | None = None) -> str:
     removed = [(d.key, c) for d in days for c in d.removed]
     kept = [(d.key, c) for d in days for c in d.sensitive_kept]
     reasons = Counter(c.verdict.category if not c.override else "overrides.toml" for _, c in removed)
@@ -152,6 +189,7 @@ def report_html(days: list[DayResult], cfg: dict, generated: dt.datetime, notes:
 famous threshold <b>{f["famous_threshold"]}</b>, terrorism threshold <b>{f["terrorism_threshold"]}</b>.
 "Fame" = number of Wikimedia sites with an article on the topic.</p>
 {notes_html}
+{_counts_html(counts or {}, cfg)}
 <p class="small">Spot a mistake? Add the article title to <code>include_articles</code> or <code>exclude_articles</code> in
 <code>overrides.toml</code> and push; the calendar rebuilds automatically.</p>
 <input type="search" id="q" placeholder="Filter rows (e.g. a date, a word, a reason)">
@@ -181,11 +219,11 @@ document.getElementById("q").addEventListener("input", (e) => {{
 
 
 def write_site(out: Path, days: list[DayResult], ics_text: str, cfg: dict, generated: dt.datetime,
-               notes: list[str]) -> dict[str, int]:
+               notes: list[str], counts: dict[str, dict[str, int]] | None = None) -> dict[str, int]:
     files = {
         ICS_NAME: ics_text,
         "index.html": index_html(cfg),
-        "report.html": report_html(days, cfg, generated, notes),
+        "report.html": report_html(days, cfg, generated, notes, counts),
         **days_json(days),
     }
     sizes = {}

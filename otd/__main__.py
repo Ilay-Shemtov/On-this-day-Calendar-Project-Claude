@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -25,7 +26,8 @@ from .sensitive import classify, decide
 from .site import ICS_NAME, write_site
 
 MAX_MISSING_DAYS = 5
-SIZE_WARNING = 900_000  # some calendar apps reject subscriptions around 1 MB
+SIZE_WARNING = 900_000
+THIN_DAY = 20  # date articles normally list 40-100+ events; fewer suggests a parsing problem upstream  # some calendar apps reject subscriptions around 1 MB
 
 
 def _days(arg: str | None) -> list[tuple[int, int]]:
@@ -71,13 +73,14 @@ def cmd_build(args, cfg) -> int:
         sitelinks_arg = None
     else:
         sitelinks_arg = sitelinks
-    results, missing = [], []
+    results, missing, counts = [], [], {}
     for month, day in _days(args.days):
         key = fetch.day_key(month, day)
         data = fetch.load_day(args.cache, key)
         if data is None:
             missing.append(key)
             continue
+        counts[key] = {kind: len(data.get(kind, [])) for kind in fetch.KINDS}
         results.append(curate_day(key, data, sitelinks_arg, cfg, overrides))
     if not results:
         print("Nothing to build: the cache is empty. Run `python -m otd fetch` first.")
@@ -85,9 +88,15 @@ def cmd_build(args, cfg) -> int:
     if missing:
         shown = ", ".join(missing[:10]) + (f" and {len(missing) - 10} more" if len(missing) > 10 else "")
         notes.append(f"{len(missing)} dates without data (left out of the calendar): {shown}")
+    thin = [k for k, c in counts.items() if c["events"] < THIN_DAY]
+    if thin:
+        notes.append(f"Fewer than {THIN_DAY} events were downloaded for {', '.join(thin)}. Every date's Wikipedia "
+                     "article normally lists far more; compare with Wikipedia (see 'Downloaded data' below).")
     generated = dt.datetime.now(dt.timezone.utc)
     ics_text = build_calendar(results, cfg, now=generated)
-    sizes = write_site(Path(args.out), results, ics_text, cfg, generated, notes)
+    sizes = write_site(Path(args.out), results, ics_text, cfg, generated, notes, counts)
+    print("Downloaded per date (median): " + ", ".join(
+        f"{statistics.median(c[k] for c in counts.values()):.0f} {k}" for k in ("events", "births", "deaths")))
 
     removed = sum(len(r.removed) for r in results)
     flagged = sum(len(r.sensitive_kept) for r in results)
