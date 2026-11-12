@@ -5,10 +5,10 @@ name = "On This Day"
 description = "Historical events, births and deaths from Wikipedia, every day."
 title_prefix = "📜 "     # shown before each day's headline; "" for none
 events_per_day = 11
-births_per_day = 5
+births_per_day = 4
 deaths_per_day = 3
 links = "none"         # Wikipedia link under each item: "none", "events" or "all"
-max_per_topic = 2        # at most this many events per day under the same label, e.g. "World War II:"
+max_per_topic = 3        # at most this many events per day under the same label, e.g. "World War II:"
 
 [filter]
 # Massacres, genocide and other atrocities that are part of a war (My Lai, the Holocaust...).
